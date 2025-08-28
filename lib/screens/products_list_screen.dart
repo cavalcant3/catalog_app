@@ -1,3 +1,4 @@
+// lib/screens/products_list_screen.dart
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../models/product.dart';
@@ -35,11 +36,11 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
   }
 
   Future<void> _refresh() async {
-    final next = _load();          // roda fora do setState
-    setState(() {                  // atualiza o estado de forma síncrona
-      _future = next;
+    final next = _load(); // roda fora do setState
+    setState(() {
+      _future = next; // atualiza o estado de forma síncrona
     });
-    await next;                    // espera fora do setState
+    await next; // espera fora do setState
   }
 
   Future<void> _openForm({Product? product}) async {
@@ -50,39 +51,56 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
     }
   }
 
-  Future<void> _delete(Product p) async {
+  // Agora retorna bool para integrar com o Dismissible
+  Future<bool> _delete(Product p) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir produto'),
         content: Text('Tem certeza que deseja excluir "${p.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Excluir')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir')),
         ],
       ),
     );
-    if (ok != true) return;
+    if (ok != true) return false;
 
     try {
       await _api.deleteProduct(p.id!);
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Excluído.')));
       await _refresh();
+      return true; // permite ao Dismissible remover da UI
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao excluir: $e')),
         );
       }
+      return false; // mantém o item na UI
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Catálogo — Produtos')),
+      appBar: AppBar(
+        title: const Text('Catálogo — Produtos'),
+        actions: [
+          IconButton(
+            tooltip: 'Voltar à loja',
+            icon: const Icon(Icons.storefront),
+            onPressed: () => Navigator.of(context)
+                .pushNamedAndRemoveUntil('/app', (r) => false),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         icon: const Icon(Icons.add),
@@ -115,18 +133,15 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
                     color: Colors.redAccent,
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.only(left: 20),
-                    child: const Icon(Icons.delete),
+                    child: const Icon(Icons.delete, color: Colors.white),
                   ),
                   secondaryBackground: Container(
                     color: Colors.redAccent,
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete),
+                    child: const Icon(Icons.delete, color: Colors.white),
                   ),
-                  confirmDismiss: (_) async {
-                    await _delete(p);
-                    return false; // não remove visualmente; recarregamos manualmente
-                  },
+                  confirmDismiss: (_) => _delete(p),
                   child: ListTile(
                     title: Text(p.name),
                     subtitle: Text(p.description ?? '—'),
