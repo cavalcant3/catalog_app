@@ -18,6 +18,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
   String _query = '';
   String _category = '';
 
+  Future<void> _refresh() async {
+    // Como o FutureBuilder chama ds.list(...) direto,
+    // um simples setState() força o recarregamento dos dados.
+    setState(() {});
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,8 +62,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (_, i) {
                     final label = i == 0 ? 'Todas' : cats[i - 1];
-                    final selected = (_category.isEmpty && i == 0) ||
-                        (_category == label);
+                    final selected =
+                        (_category.isEmpty && i == 0) || (_category == label);
                     return ChoiceChip(
                       label: Text(label),
                       selected: selected,
@@ -69,82 +76,121 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<Product>>(
-              future: widget.ds.list(q: _query, category: _category),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final items = snap.data!;
-                if (items.isEmpty) {
-                  return const Center(child: Text('Nenhum produto encontrado.'));
-                }
-                return GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: .72,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final p = items[i];
-                    return InkWell(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(product: p),
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: FutureBuilder<List<Product>>(
+                future: widget.ds.list(q: _query, category: _category),
+                builder: (context, snap) {
+                  // LOADING
+                  if (snap.connectionState != ConnectionState.done) {
+                    return  ListView(
+                      physics: AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 400,
+                          child: Center(child: CircularProgressIndicator()),
                         ),
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Card(
-                        clipBehavior: Clip.antiAlias,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      ],
+                    );
+                  }
+                  // ERROR
+                  if (snap.hasError) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 400,
+                          child: Center(
+                            child: Text('Erro: ${snap.error}'),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Container(
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                  child: Icon(Icons.image),
+                      ],
+                    );
+                  }
+
+                  final items = snap.data ?? const <Product>[];
+                  // EMPTY
+                  if (items.isEmpty) {
+                    return  ListView(
+                      physics: AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 400,
+                          child: Center(child: Text('Nenhum produto encontrado.')),
+                        ),
+                      ],
+                    );
+                  }
+
+                  // GRID
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: .72,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) {
+                      final p = items[i];
+                      return InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailScreen(product: p),
+                          ),
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  color: Colors.grey.shade200,
+                                  child: const Center(
+                                    child: Icon(Icons.image),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    p.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      p.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    formatBRL(p.price),
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      formatBRL(p.price),
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],

@@ -1,6 +1,4 @@
 import 'dart:convert';
-// NÃO remova 'dart:io' se você também rodar Android/iOS/desktop.
-// Só cuide para não usar Platform/HttpOverrides quando kIsWeb == true.
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -21,7 +19,6 @@ class _DevHttpOverrides extends HttpOverrides {
 
 class ApiClient {
   ApiClient._(this.baseUrl) {
-    // HttpOverrides só em dispositivos nativos (NÃO na web)
     assert(() {
       if (!kIsWeb) {
         HttpOverrides.global = _DevHttpOverrides();
@@ -32,13 +29,13 @@ class ApiClient {
 
   final Uri baseUrl;
 
-  /// Use HTTP em dev no navegador para evitar problemas de HTTPS self-signed.
+
   factory ApiClient.auto({bool useHttps = false}) {
     if (kIsWeb) {
       final scheme = useHttps ? 'https' : 'http';
       return ApiClient._(Uri.parse('$scheme://localhost:8080'));
     }
-    // Nativo (Android/iOS/desktop)
+
     String host = 'localhost';
     if (Platform.isAndroid) host = '10.0.2.2';
     final scheme = useHttps ? 'https' : 'http';
@@ -56,9 +53,24 @@ class ApiClient {
   }
 
   Future<List<Product>> listProducts() async {
-    final res = await http.get(_u('/products'));
+    var url = _u('/products');
+
+
+    if (kIsWeb) {
+      final qp = Map<String, String>.from(url.queryParameters);
+      qp['_'] = DateTime.now().millisecondsSinceEpoch.toString();
+      url = url.replace(queryParameters: qp);
+    }
+
+    final res = await http.get(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+    );
     if (res.statusCode != 200) {
-      throw HttpException('GET /products failed: ${res.statusCode}');
+      throw HttpException('GET /products failed: ${res.statusCode} ${res.body}');
     }
     final data = jsonDecode(res.body) as List<dynamic>;
     return data

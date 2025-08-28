@@ -1,3 +1,4 @@
+// lib/data/products_hybrid_ds.dart
 import '../models/product.dart';
 import '../api_client.dart';
 import 'products_data_source.dart';
@@ -15,15 +16,12 @@ class ProductsHybridDataSource implements ProductsDataSource {
 
   @override
   Future<List<Product>> list({String? q, String? category}) async {
-    // 1) mock (com filtros de categoria/busca)
-    final mockList = await mock.list(q: q, category: category);
-
-    // 2) http (sem categorias; filtra só por busca)
+    // 1) HTTP (backend) — sempre considerar no resultado
     List<Product> httpList = [];
     try {
       httpList = await api.listProducts();
     } catch (_) {
-      // backend pode não estar rodando – tudo bem, seguimos só com mock
+      // backend pode estar fora — ok, seguimos só com mock
     }
     Iterable<Product> httpFiltered = httpList;
     if (q != null && q.trim().isNotEmpty) {
@@ -33,12 +31,28 @@ class ProductsHybridDataSource implements ProductsDataSource {
           (p.description ?? '').toLowerCase().contains(term));
     }
 
-    // 3) merge (HTTP sobrescreve mock se id bater)
-    final map = <String?, Product>{};
-    for (final p in mockList) map[p.id] = p;
-    for (final p in httpFiltered) map[p.id] = p;
+    // 2) Mock — pode filtrar por categoria e/ou busca
+    final mockList = await mock.list(q: q, category: category);
 
-    return map.values.toList(growable: false);
+    // 3) Merge: HTTP primeiro; mock só entra se ID ainda não existe
+    final byId = <String?, Product>{};
+    for (final p in httpFiltered) {
+      byId[p.id] = p;
+    }
+    for (final p in mockList) {
+      byId.putIfAbsent(p.id, () => p);
+    }
+
+    final out = byId.values.toList();
+
+    // 4) Ordena: itens do backend primeiro, mocks depois
+    out.sort((a, b) {
+      int ra = (a.id?.startsWith('mock-') ?? false) ? 1 : 0;
+      int rb = (b.id?.startsWith('mock-') ?? false) ? 1 : 0;
+      return ra - rb;
+    });
+
+    return out;
   }
 
   @override
@@ -46,7 +60,6 @@ class ProductsHybridDataSource implements ProductsDataSource {
     try {
       return await api.getProduct(id);
     } catch (_) {
-      // se não achar no backend, tenta no mock
       return mock.getById(id);
     }
   }

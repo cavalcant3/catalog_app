@@ -1,3 +1,4 @@
+// lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import '../data/products_data_source.dart';
 import '../models/product.dart';
@@ -6,53 +7,104 @@ import 'product_detail_screen.dart';
 
 String formatBRL(double v) => 'R\$ ${v.toStringAsFixed(2)}';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final ProductsDataSource ds;
   const HomeScreen({super.key, required this.ds});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late Future<List<Product>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.ds.list();
+  }
+
+  Future<void> _refresh() async {
+    final next = widget.ds.list();
+    setState(() => _future = next);
+    await next;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Loja — Home')),
-      body: FutureBuilder<List<Product>>(
-        future: ds.list(),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text('Erro: ${snap.error}'));
-          }
-          final items = snap.data ?? const <Product>[];
-          if (items.isEmpty) {
-            return const Center(child: Text('Sem produtos (mock).'));
-          }
-          final highlights = items.take(5).toList();
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _HeroBanner(onShop: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ProductDetailScreen(product: highlights.first),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<List<Product>>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+
+              return  ListView(
+                physics: AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: 400,
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-                );
-              }),
-              const SizedBox(height: 16),
-              Text('Destaques', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 220,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: highlights.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) => _ProductCard(p: highlights[i]),
+                ],
+              );
+            }
+            if (snap.hasError) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: 400,
+                    child: Center(child: Text('Erro: ${snap.error}')),
+                  ),
+                ],
+              );
+            }
+            final items = snap.data ?? const <Product>[];
+            if (items.isEmpty) {
+              return  ListView(
+                physics: AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: 400,
+                    child: Center(child: Text('Sem produtos.')),
+                  ),
+                ],
+              );
+            }
+
+            final highlights = items.take(5).toList();
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _HeroBanner(onShop: () {
+                  if (highlights.isNotEmpty) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ProductDetailScreen(product: highlights.first),
+                      ),
+                    );
+                  }
+                }),
+                const SizedBox(height: 16),
+                Text('Destaques', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 220,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: highlights.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, i) => _ProductCard(p: highlights[i]),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -82,9 +134,10 @@ class _HeroBanner extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Bem-vindo! 👋', style: Theme.of(context).textTheme.headlineSmall),
+                Text('Bem-vindo! 👋',
+                    style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 6),
-                const Text('Confira nossos destaques e promoções mockadas.'),
+                const Text('Confira nossos destaques e promoções.'),
                 const SizedBox(height: 12),
                 FilledButton(onPressed: onShop, child: const Text('Ver produto')),
               ],
@@ -142,7 +195,8 @@ class _ProductCard extends StatelessWidget {
             ),
             Text(
               formatBRL(p.price),
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              style:
+              TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 4),
             Row(
